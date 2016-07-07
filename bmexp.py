@@ -4,7 +4,7 @@ import json
 from mathutils import Matrix
 from functools import reduce
 
-d16 = lambda x: x/16.0
+d16 = lambda x: x*16.0
 
 fd = { (0, -1, 0) : 'down',
 		(0, 1, 0) : 'up',
@@ -29,10 +29,10 @@ def procFace(f):
 	p['to'] = list(map(d16, co[-1]))
 	p['shade'] = False
 	mf = {}
-	sn = fd[tuple(f.normal.normalized().xyz)]
+	sn = fd[tuple(f.normal.normalized().xyz)] #string normal
 	print("sn", sn)
-	mf[sn] = {}
-	mf[sn]['uv'] = [0.0, 0.0, 0.0, 0.0]
+	mf[sn] = {} #minecraft face
+	mf[sn]['uv'] = [0.0, 0.0, 1.0, 1.0]
 	mf[sn]['texture'] = '#z00'
 	mf[sn]['cullface'] = True
 	p['faces'] = mf
@@ -58,8 +58,13 @@ def main():
 	out['elements'] = []
 
 	for f in bm.faces:
+		f.normal_update()
 		procFace(f)
 
 	bm.free()  # free and prevent further access
 	print(json.dumps(out, indent=4, separators=(',', ': ')))
+	fi = open('/home/stxxt/.minecraft/resourcepacks/ATaleOfKreios/assets/minecraft/models/block/coal_ore.json', 'w')
+	fi.write(json.dumps(out, indent=4, separators=(',', ': ')))
+	fi.close()
+
 	print("done")
