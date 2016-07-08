@@ -43,6 +43,8 @@ def procFace(f):
 	for loop in f.loops:
 		uvl[loop.vert] = list(loop[uv_layer].uv)
 	mf[sn]['uv'] = list(map(d16, uvl[co[0]] + uvl[co[-1]]))
+	mf[sn]['uv'][1] = 16 - mf[sn]['uv'][1]
+	mf[sn]['uv'][3] = 16 - mf[sn]['uv'][3]
 	mf[sn]['texture'] = '#z00'
 	mf[sn]['cullface'] = True
 	p['faces'] = mf
