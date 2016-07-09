@@ -4,7 +4,7 @@ import json
 from mathutils import Matrix
 from functools import reduce
 
-d16 = lambda x: x*16.0
+d16 = lambda x: x * 16.0
 
 fd = { (0, -1, 0) : 'down',
 		(0, 1, 0) : 'up',
@@ -13,9 +13,17 @@ fd = { (0, -1, 0) : 'down',
 		(0, 0, -1) : 'north',
 		(0, 0, 1) : 'south' }
 
+def procUV(f, mf, sv, ev):
+	global uv_layer
+	for loop in f.loops:
+		uvl[loop.vert] = list(loop[uv_layer].uv)
+	uv = list(map(d16, uvl[co[0]] + uvl[co[-1]]))
+	mf[sn]['uv'] = [uv[2], uv[1], uv[0], uv[3]]
+	mf[sn]['uv'][1] = 16 - mf[sn]['uv'][1]
+	mf[sn]['uv'][3] = 16 - mf[sn]['uv'][3]
 
 def procFace(f):
-	global out, uv_layer
+	global out
 	p = {}
 	co = sorted(f.verts, key = lambda v: tuple(v.co.xyz))
 
@@ -40,11 +48,7 @@ def procFace(f):
 	print("sn", sn)
 	mf[sn] = {} #minecraft face
 	uvl = {} #create uv lookup table containing pairs of bmvert : uv-coord as list
-	for loop in f.loops:
-		uvl[loop.vert] = list(loop[uv_layer].uv)
-	mf[sn]['uv'] = list(map(d16, uvl[co[0]] + uvl[co[-1]]))
-	mf[sn]['uv'][1] = 16 - mf[sn]['uv'][1]
-	mf[sn]['uv'][3] = 16 - mf[sn]['uv'][3]
+	procFace(f, mf, co[0], co[-1])
 	mf[sn]['texture'] = '#z00'
 	mf[sn]['cullface'] = True
 	p['faces'] = mf
