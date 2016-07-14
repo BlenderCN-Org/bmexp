@@ -2,10 +2,11 @@ import bpy
 import bmesh
 import json
 from mathutils import Matrix
+from mathutils import Vector
 from functools import reduce
 
 d16 = lambda x: x * 16.0
-
+m = Matrix([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]) #swap y and z
 fd = { (0, -1, 0) : 'down',
 		(0, 1, 0) : 'up',
 		(-1, 0, 0) : 'west',
@@ -13,20 +14,10 @@ fd = { (0, -1, 0) : 'down',
 		(0, 0, -1) : 'north',
 		(0, 0, 1) : 'south' }
 
-def procUV(f, mf, sv, ev):
-	global uv_layer
-	for loop in f.loops:
-		uvl[loop.vert] = list(loop[uv_layer].uv)
-	uv = list(map(d16, uvl[co[0]] + uvl[co[-1]]))
-	mf[sn]['uv'] = [uv[2], uv[1], uv[0], uv[3]]
-	mf[sn]['uv'][1] = 16 - mf[sn]['uv'][1]
-	mf[sn]['uv'][3] = 16 - mf[sn]['uv'][3]
-
-def procFace(f):
-	global out
+def processFace(f):
+	global out, uv_layer
 	p = {}
-	co = sorted(f.verts, key = lambda v: tuple(v.co.xyz))
-
+	co = sorted(f.verts, key = lambda v: tuple(v.co.xyz))	
 	#test if current face only got 4 vertices (is a quad)
 	if (len(co) != 4):
 		raise Exception("Found non-quad face")
@@ -38,21 +29,48 @@ def procFace(f):
 	for x in test:
 		if (x > 2 or x < -1):
 			raise Exception("Model out of bounds")
-	#test end
+	#test end			
+		
+	
+	face = type('face', (object,), {})()
+	face.fro = co[0]
+	face.to = co[-1]
+	face.nor = f.normal	
+	uvl = {} #create uv lookup table containing pairs of bmvert : uv-coord as list	
+	for loop in f.loops:
+		uvl[loop.vert] = list(loop[uv_layer].uv)	
+	uv = list(map(d16, uvl[face.fro] + uvl[face.to]))
+	face.uv = [uv[0], 16.0 - uv[1], uv[2], 16.0 - uv[3]]	
+	return face
 
-	p['from'] = list(map(d16, list(co[0].co.xyz)))
-	p['to'] = list(map(d16, list(co[-1].co.xyz)))
-	p['shade'] = False
-	mf = {}
-	sn = fd[tuple((f.normal.normalized()).xyz)] #string normal
-	print("sn", sn)
-	mf[sn] = {} #minecraft face
-	uvl = {} #create uv lookup table containing pairs of bmvert : uv-coord as list
-	procFace(f, mf, co[0], co[-1])
-	mf[sn]['texture'] = '#z00'
-	mf[sn]['cullface'] = True
-	p['faces'] = mf
-	out['elements'].append(p)
+#face[from vert, to vert, normal, uv[0-3]]
+def export(faces, path):
+	out = {}
+	out['ambientocclusion'] = False
+	out['textures'] = { 'z00' : 'blocks/z00'}
+	out['elements'] = []
+	for face in faces:
+		p = {}
+		p['from'] = list(map(d16, list(face.fro.co.yzx)))
+		p['to'] = list(map(d16, list(face.to.co.yzx)))
+		p['shade'] = False
+
+		#uv face...
+		uvf = {}
+		sn = fd[tuple(face.nor.normalized().yzx)] #normal in string form #EDIT THIS XYZ!!!! OR fd
+		print("sn", sn)
+		uvf[sn] = {}
+		uvf[sn]['texture'] = '#z00'
+		uvf[sn]['cullface'] = True
+		uvf[sn]['uv'] = face.uv
+
+		p['faces'] = uvf
+		out['elements'].append(p)
+
+
+	fi = open(path, 'w')
+	fi.write(json.dumps(out, indent=4, separators=(',', ': ')))
+	fi.close()
 
 def main():
 	global out, uv_layer
@@ -62,28 +80,19 @@ def main():
 
 	bm = bmesh.new()
 	bm.from_mesh(me)
-
-	m = Matrix([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]) #swap y and z
+	
 	bm.verts.ensure_lookup_table()
-	for v in bm.verts:
-		v.co = m * v.co
-
 	bm.faces.ensure_lookup_table()
-	for f in bm.faces:
-		f.normal = m * f.normal
 	uv_layer = bm.loops.layers.uv.active
-	out = {}
-	out['ambientocclusion'] = False
-	out['textures'] = { 'z00' : 'blocks/z00'}
-	out['elements'] = []
 
+	processedFaces = []
 	for f in bm.faces:
-		procFace(f)
+		processedFaces.append(processFace(f))
 
-	bm.free()  # free and prevent further access
-	#print(json.dumps(out, indent=4, separators=(',', ': ')))
-	fi = open('/home/stxxt/.minecraft/resourcepacks/ATaleOfKreios/assets/minecraft/models/block/coal_ore.json', 'w')
-	fi.write(json.dumps(out, indent=4, separators=(',', ': ')))
-	fi.close()
+	#export
+	path = 'C:\\Users\\HM\\AppData\\Roaming\\.minecraft\\resourcepacks\\Konv2\\assets\\minecraft\\models\\block\\coal_ore.json'
+	export(processedFaces, path)
+
+	bm.free()  # free and prevent further access		
 
 	print("done")
