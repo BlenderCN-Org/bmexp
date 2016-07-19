@@ -20,8 +20,14 @@ fd = { (0, -1, 0) : 'down',
 		(0, 0, -1) : 'north',
 		(0, 0, 1) : 'south' }
 
-fsolver = { (0, 2) : (90, False, True),
-			(1, 3) : (90, False, False)}
+fsolver = {(0, 2, 1) : (90, False, True),
+			(3, 1, 0) : (0, False, False), #1 
+			(2, 0, 3) : (90, False, True), #2 
+			(1, 3, 2) : (0, False, False), #3 
+			(3, 1, 2) : (90, False, True), #4
+			(0, 2, 3) : (0, False, False), #0 ff
+			(1, 3, 0) : (90, False, True),
+			(2, 0, 1) : (0, False, False) } 
 
 def processFace(f):
 	global out, uv_layer
@@ -37,7 +43,7 @@ def processFace(f):
 	test = list(reduce(lambda x, y: x + y, allCoords))
 	for x in test:
 		if (x > 2 or x < -1):
-			raise Exception("Model out of bounds")
+			raise Exception("Model out of bounds: " + str(x))
 	#test end			
 		
 	
@@ -51,21 +57,21 @@ def processFace(f):
 		t = list(map(lambda x: round(x, 3), list(loop[uv_layer].uv)))
 		uvl[loop.vert] = t
 		uli.append(t)	
-	xs = list(map(lambda x: x[0], uli)) #is sorted CW starting from top left corner
+	xs = list(map(lambda x: x[0], uli))
 	ys = list(map(lambda y: y[1], uli))
-	t = max(ys)
-	b = min(ys)
-	l = min(xs)
-	r = max(xs)	
-	uli = [[l, b], [l, t], [r, t], [r, b]]	
+	t, b, l, r = max(ys), min(ys), min(xs), max(xs)	
+	uli = [[l, b], [l, t], [r, t], [r, b]]	#is sorted CW starting from bottom left corner
 
 	uv = list(map(d16, uvl[face.fro] + uvl[face.to]))
 	
 	froUvIndex = index(uli, uvl[face.fro])
 	toUvIndex = index(uli, uvl[face.to])
-	print("froUvIndex", froUvIndex, "toUvIndex", toUvIndex)
+	testIndex = index(uli, uvl[co[1]])
+	fk = sorted(list(fsolver.keys()))
 
-	face.rot, swapx, swapy = fsolver[(froUvIndex, toUvIndex)]	
+	print(froUvIndex, toUvIndex, testIndex, ":", fk.index((froUvIndex, toUvIndex, testIndex)))	
+
+	face.rot, swapx, swapy = fsolver[(froUvIndex, toUvIndex, testIndex)]	
 	c0, c1, c2, c3 = 0, 1, 2, 3 #0321
 	if (swapx): c0, c2 = 2, 0
 	if (swapy): c1, c3 = 3, 1
@@ -93,8 +99,7 @@ def export(faces, path):
 		uvf[sn]['uv'] = face.uv		
 		uvf[sn]['rotation'] = face.rot		
 		p['faces'] = uvf
-		out['elements'].append(p)
-
+		out['elements'].append(p)	
 
 	fi = open(path, 'w')
 	fi.write(json.dumps(out, indent=4, separators=(',', ': ')))
@@ -114,7 +119,8 @@ def main():
 	uv_layer = bm.loops.layers.uv.active
 
 	processedFaces = []
-	for f in bm.faces:
+	forder = sorted(list(bm.faces), key = lambda f: f.verts[0].co.x)
+	for f in forder:
 		processedFaces.append(processFace(f))
 
 	#export
