@@ -29,10 +29,25 @@ fsolver = {(0, 2, 1) : (90, False, True),
 			(1, 3, 0) : (90, False, True),
 			(2, 0, 1) : (0, False, False) } 
 
+projectionAxis = {  (0, 0, -1) : ((1.0, 0.0, 0.0), (0.0, -1.0, 0.0)),
+					(0, 0, 1) : ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+					(1, 0, 0) :  ((0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+					(-1, 0, 0) :  ((0.0, -1.0, 0.0), (0.0, 0.0, 1.0)),
+					(0, -1, 0) :  ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+					(0, 1, 0) :  ((-1.0, 0.0, 0.0), (0.0, 0.0, 1.0)) }
+
+def project(v, normal):
+	p1, p2 = projectionAxis[tuple(normal)]
+	p1, p2 = Vector(p1), Vector(p2)
+	result = (p1.dot(v), p2.dot(v))
+	print("res", result, "normal", tuple(normal))
+
+	return result
+
 def processFace(f):
 	global out, uv_layer
 	p = {}
-	co = sorted(f.verts, key = lambda v: tuple(v.co.xyz))	
+	co = sorted(f.verts, key = lambda v: project(v.co.xyz, f.normal.normalized()))	
 	#test if current face only got 4 vertices (is a quad)
 	if (len(co) != 4):
 		raise Exception("Found non-quad face")
@@ -68,8 +83,11 @@ def processFace(f):
 	toUvIndex = index(uli, uvl[face.to])
 	testIndex = index(uli, uvl[co[1]])
 	fk = sorted(list(fsolver.keys()))
-
-	print(froUvIndex, toUvIndex, testIndex, ":", fk.index((froUvIndex, toUvIndex, testIndex)))	
+	try:
+		print(froUvIndex, toUvIndex, testIndex, ":", fk.index((froUvIndex, toUvIndex, testIndex)))	
+	except Exception as e:
+		print("from:", face.fro.co.xyz, "to:", face.to.co.xyz)
+		raise e
 
 	face.rot, swapx, swapy = fsolver[(froUvIndex, toUvIndex, testIndex)]	
 	c0, c1, c2, c3 = 0, 1, 2, 3 #0321
