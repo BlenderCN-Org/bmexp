@@ -4,15 +4,32 @@ import json
 from mathutils import Matrix
 from mathutils import Vector
 from functools import reduce
+from operator import attrgetter
 
 d16 = lambda x: x * 16.0
-m = Matrix([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]) #swap y and z
-fd = { (0, -1, 0) : 'down',
+#d16 = lambda x: x
+
+round4 = lambda x: round(x, 4)
+mcos = lambda vec: attrgetter('yzx')(vec)
+
+fd = { (0, -1, 0) : 'down', #in MCOS
 		(0, 1, 0) : 'up',
 		(-1, 0, 0) : 'west',
 		(1, 0, 0) : 'east',
 		(0, 0, -1) : 'north',
-		(0, 0, 1) : 'south' }
+		(0, 0, 1) : 'south' }	
+
+#vector distance to positive positive positive
+#10000 is an arbritary big number which is hopefully big enough
+def vecDistToPPP(vec):
+	return (vec.co - Vector([10000.0, 10000.0, 10000.0])).length
+
+#vector distance to negative negative
+#only used for textures
+def vecDistToNN(vec):
+	vec = Vector(vec)
+	return (vec - Vector([-10000.0, -10000.0])).length
+
 
 def roundTouple(tu):
 	return tuple(map(lambda x: float(int(x)), tu))
@@ -20,7 +37,8 @@ def roundTouple(tu):
 def processFace(f):
 	global out, uv_layer
 	p = {}
-	co = sorted(f.verts, key = lambda v: tuple(v.co.xyz))	
+	co = f.verts
+
 	#test if current face only got 4 vertices (is a quad)
 	if (len(co) != 4):
 		raise Exception("Found non-quad face")
@@ -33,20 +51,58 @@ def processFace(f):
 		if (x > 2 or x < -1):
 			raise Exception("Model out of bounds")
 	#test end			
-		
+
 	
 	face = type('face', (object,), {})()
-	face.fro = co[0]
-	face.to = co[-1]
-	face.nor = f.normal	
-	uvl = {} #create uv lookup table containing pairs of bmvert : uv-coord as list	
+
+	fro = co[0]
+	to = co[0]
+	for v in co: #tiny sort since sorted doesn't work shit
+		if (vecDistToPPP(v) > vecDistToPPP(fro)):
+			fro = v
+		if (vecDistToPPP(v) < vecDistToPPP(to)):						
+			to = v
+			
+	face.fro = fro
+	face.to = to
+	face.nor = fd[roundTouple(mcos(f.normal.normalized()))]	
+
+	#FIND ROTATION
+	uvl = {} #create uv lookup table containing pairs of bmvert : uv-coord as list		
 	for loop in f.loops:
-		uvl[loop.vert] = list(loop[uv_layer].uv)	
-	uv = list(map(d16, uvl[face.fro] + uvl[face.to]))
-	face.uv = [uv[0], 16.0 - uv[1], uv[2], 16.0 - uv[3]]	
+		uvl[loop.vert] = list(loop[uv_layer].uv)
+
+	
+
+	### MCOS ROTATIONS
+	uvl = {} #create uv lookup table containing pairs of bmvert : uv-coord as list	
+
+	#mirror y coordinate of all uv coordinates
+	for loop in f.loops:
+		uv = loop[uv_layer].uv		
+		uv.y = 1.0 - uv.y		
+		uvl[loop.vert] = list(uv)	
+
+	#find smallest (upper left)(closest to 0,0)
+	#find biggest (lower right)(furthest away to 0,0)
+	uvCoords = list(uvl.values())	
+	smallestUV = uvCoords[0]
+	biggestUV = uvCoords[0]	
+	for uvCoord in uvCoords[1:]:
+		if (vecDistToNN(smallestUV) > vecDistToNN(uvCoord)):
+			smallestUV = uvCoord
+		if (vecDistToNN(biggestUV) < vecDistToNN(uvCoord)):
+			biggestUV = uvCoord
+	print(smallestUV, biggestUV)
+	uv = list(map(d16, smallestUV + biggestUV))
+	#uv = list(map(d16, uvl[face.fro] + uvl[face.to]))
+
+	face.uv = uv
+	face.rotation = -90
 	return face
 
 #face[from vert, to vert, normal, uv[0-3]]
+#only use mcos here
 def export(faces, path):
 	out = {}
 	out['ambientocclusion'] = False
@@ -54,18 +110,18 @@ def export(faces, path):
 	out['elements'] = []
 	for face in faces:
 		p = {}
-		p['from'] = list(map(d16, list(face.fro.co.yzx)))
-		p['to'] = list(map(d16, list(face.to.co.yzx)))
+		p['from'] = list(map(round4, list(map(d16, list(mcos(face.fro.co))))))
+		p['to'] = list(map(round4, list(map(d16, list(mcos(face.to.co))))))
 		p['shade'] = False
 
 		#uv face...
 		uvf = {}
-		sn = fd[roundTouple(face.nor.normalized().yzx)] #normal in string form #EDIT THIS XYZ!!!! OR fd
-		print("sn", sn)
+		sn = face.nor #normal in string form eg. 'UP'
 		uvf[sn] = {}
 		uvf[sn]['texture'] = '#z00'
 		uvf[sn]['cullface'] = True
 		uvf[sn]['uv'] = face.uv
+		uvf[sn]['rotation'] = face.rotation % 360
 
 		p['faces'] = uvf
 		out['elements'].append(p)
@@ -77,7 +133,7 @@ def export(faces, path):
 
 def main():
 	global out, uv_layer
-	print("main called")
+	print("[BmExp] Exporting!")
 
 	me = bpy.context.object.data
 
@@ -98,4 +154,4 @@ def main():
 
 	bm.free()  # free and prevent further access		
 
-	print("done")
+	print("[BmExp] done!")
