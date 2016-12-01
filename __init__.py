@@ -33,7 +33,11 @@ def register():
     kc = bpy.context.window_manager.keyconfigs.addon
     if kc:
         km = kc.keymaps.new(name="3D View", space_type="VIEW_3D")
+<<<<<<< HEAD
         kmi = km.keymap_items.new('object.bmexp', 'Y', 'PRESS', shift=True)
+=======
+        kmi = km.keymap_items.new('object.bmexp', 'T', 'PRESS', shift=True)
+>>>>>>> c5a7e7bbe7c2440dc5ab8306b6b0099097fa371b
 
 
 def unregister():
